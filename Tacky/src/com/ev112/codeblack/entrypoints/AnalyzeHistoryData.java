@@ -311,7 +311,7 @@ public class AnalyzeHistoryData {
 			String symbol = instr.getSymbol();
 			String date = DateTools.DateFromTimestamp(b.getTime() * 1000);
 			
-			// System.out.println(symbol + " " + date + /* " time: " + b.formattedTime() + */ " open:" + b.getOpen() + " close:" + b.getClose() + " low:" + b.getLow() + " high:" + b.getHigh());
+			System.out.println(symbol + " " + date + " time: " + " open:" + b.getOpen() + " close:" + b.getClose() + " low:" + b.getLow() + " high:" + b.getHigh());
 			
 			macd.addPrice(b.getClose());
 			
@@ -336,7 +336,7 @@ public class AnalyzeHistoryData {
 		
 		
 		Boolean armed = false;
-		Boolean is_positive = true;
+		Double oldDiff = 0d;
 		
 		macd = new ClassicMACD(26, 12, 9);
 		for (GenericBar b : bars) {
@@ -344,35 +344,75 @@ public class AnalyzeHistoryData {
 			String date = DateTools.DateFromTimestamp(b.getTime() * 1000);
 			
 			// System.out.println(symbol + " " + date + /* " time: " + b.formattedTime() + */ " open:" + b.getOpen() + " close:" + b.getClose() + " low:" + b.getLow() + " high:" + b.getHigh());
-			
 			macd.addPrice(b.getClose());
 			
 			Double diff = macd.getMacd() - macd.getSignal();
 			Double absdiff = Math.abs(diff);
 			
-			System.out.println("Current MACD:" + macd.getMacd() + " " + macd.getSignal() + " " + diff);
+			// System.out.println("Current MACD:" + macd.getMacd() + " " + macd.getSignal() + " " + diff);
+			System.out.println(DateTools.DateFromTimestamp(b.getTime() * 1000) + " " + b.getClose());
 			
-			if (!armed && absdiff > stats.getStandardDeviation() * 2.0) {
+			if (!armed && !in_pos && absdiff > stats.getStandardDeviation() * 0.5) {
 				/* arm indicator! */
 				armed = true;
+				System.out.println("....ARMING....");
 			}
-			else if (armed) {
-				
-				if (isCross()) {
+			else if (armed || in_pos) {
+				if (isCross(oldDiff, diff)) {
 					
+					if (oldDiff > diff) {
+						System.out.println("We have a cross DOWN!");
+						takeOrExitPos("SHORT", b.getClose());
+					}
+					else {
+						System.out.println("We have a cross UP!");
+						takeOrExitPos("LONG", b.getClose());
+					}
+					armed = false;
 				}
 			}
 			
-			if (macd.getMacd() > (stats.getStandardDeviation() * 1.5)) {
-				System.out.println("HIGH!");
-			}
-			else 
-				if (macd.getMacd() < (-stats.getStandardDeviation() * 1.5)) {
-					System.out.println("LOW!");
-				}
-				
+			oldDiff = diff;
 		}
 		
+		System.out.println("Last price is " + bars.get(bars.size()-1).getClose());
+	}
+	
+	
+	private Boolean in_pos = false;
+	private Double entry_price = 0d;
+	
+	private void takeOrExitPos(String str, Double price) {
+		if (str.equals("LONG")) {
+			if (in_pos) {
+				// exit SHORT pos
+				Double profit = entry_price - price;
+				System.out.println("Exit short pos with Result:" + profit);
+				in_pos = false;
+			}
+			else {
+				entry_price = price;
+				in_pos = true;
+				System.out.println("Taking long pos at " + entry_price);
+			}
+		}
+		else { // SHORT
+			if (in_pos) {
+				// exit LONG pos
+				Double profit = price - entry_price;
+				System.out.println("Exit long pos at Result:" + profit);
+				in_pos = false;
+			}
+			else {
+				System.out.println("Taking short pos at " + entry_price);
+				entry_price = price;
+				in_pos = true;
+			}
+		}
+	}
+	
+	private Boolean isCross(final Double a, final Double b) {
+		return a * b < 0.0;
 	}
 	
 	public static void main(String[] args) {
