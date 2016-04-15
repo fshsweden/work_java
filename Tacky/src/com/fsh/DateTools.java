@@ -12,7 +12,6 @@ import java.util.Locale;
 import org.joda.time.DateTime;
 import org.joda.time.Days;
 
-
 public class DateTools {
 	public static String getNowAsStr() {
 		DateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");

@@ -3,9 +3,6 @@ package com.fsh;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import javax.security.auth.login.Configuration;
 
 import org.apache.commons.cli.BasicParser;
 import org.apache.commons.cli.CommandLine;
@@ -15,19 +12,11 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.UnrecognizedOptionException;
-import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
-import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.ev112.codeblack.common.dataengine.DataEngineEventHandler.DATA_QUALITY;
-import com.ev112.codeblack.common.feed.objects.FeedTrade;
-import com.ev112.codeblack.common.strategy.strategies.tech.Candle;
-import com.ev112.codeblack.common.strategy.strategies.tech.signals.MACD;
-import com.ev112.codeblack.common.strategy.strategies.tech.signals.MACDSignal;
-import com.ev112.codeblack.common.utilities.LogTools;
+import com.ev112.codeblack.common.utilities.Flag;
 import com.ib.client.Contract;
-import com.ib.client.EDecoder;
 import com.ib.client.Types.SecType;
 
 import mytrade.common_if.GenericBar;
@@ -45,8 +34,9 @@ import mytrade.common_if.TwsConfig.Cfg;
 import mytrade.ib.IBMarketAPI;
 import mytrade.ib.MyIBInstrument;
 
+
 /*
- * 
+ *	Should change this to use MyTrade instead! 
  * 
  */
 public class AnalyzeHistoryData {
@@ -59,122 +49,54 @@ public class AnalyzeHistoryData {
 	Boolean req = true;
 	Boolean notreq = false;
 
-	private String symbol;
-	private SecType secType = SecType.STK;
 	private String twsHost = "";
 	private String twsPort = "";
 	private String twsClientId = "";
 	private String twsAccount = ""; // default
-	private String currency = "";
-	private String exchange = "";
-	private String expiry = "";
-	private String duration = "";
+	
+	private LinkedBlockingQueue<MyInstrument> instrumentQueue = new LinkedBlockingQueue<MyInstrument>();
 
-	private String env = "";
-	private Configuration alpha_config;
-
-	private LinkedBlockingQueue<MyInstrument> q = new LinkedBlockingQueue<MyInstrument>();
-
-	private int duration_i = 1;
+	private int duration_i = 5;
 	private String duration_unit_s = "Y";
 	private String barsize_s = "1D";
 	
 	public enum PositionState {NEUTRAL, LONG, SHORT } ;
 	
-	public class Investment {
+	private List<Contract> contracts = new ArrayList<Contract>();
+	private List<Symbol> symbols = new ArrayList<Symbol>();
+	
+	private void fillContractList() {
+
+		/* Replace Contract reference with "GenericContract" */
+		Contract c = new Contract();
+		contracts.add(makeContract("STK", "DFE","SMART","USD","",""));
+		contracts.add(makeContract("STK", "ISRA","SMART","USD","",""));
+		contracts.add(makeContract("STK", "EWS","SMART","USD","",""));
+		contracts.add(makeContract("STK", "EWO","SMART","USD","",""));
+		contracts.add(makeContract("STK", "EIRL","SMART","USD","",""));
 		
-		private String symbol;
-		private String entry_date;
-		private Double entry_price;
-		private String exit_date;
-		private Double exit_price;
-		private Integer pos;
+//		contracts.add(makeContract("STK", "MIDD","","","",""));
+		contracts.add(makeContract("STK", "VTI","SMART","USD","",""));
+		contracts.add(makeContract("STK", "SPY","SMART","USD","",""));
+		contracts.add(makeContract("STK", "RSP","SMART","USD","",""));
+		contracts.add(makeContract("STK", "SPD","SMART","USD","",""));
 		
-		public Investment(String symbol) {
-			super();
-			this.symbol = symbol;
-		}
-		
-		public void enterPosition(String date, Integer new_pos, Double price) {
-			entry_date = date;
-			entry_price = price;
-			pos = new_pos;
-		}
-		
-		public void closePosition(String date, Double price) {
-			exit_date = date;
-			exit_price = price;
-		}
-		
-		public Integer getPosition() {
-			return pos;
-		}
-		
-		public Double getPnL() {
-			if (pos > 0)
-				return exit_price - entry_price;
-			if (pos < 0)
-				return entry_price - exit_price;
-			return 0.0;
-		}
-		
-		public Double getPnlPct() {
-			return getPnL() / entry_price;
-		}
+		contracts.add(makeContract("STK", "FXE","SMART","USD","",""));
 	}
 	
-	public class Symbol {
-		private String symbol;
-		private List<Investment> trades = new ArrayList<Investment>();
-		private Investment currentInvestment = null;
-		
-		public Symbol(String name) {
-			symbol = name;
-		}
-		
-		public void addInvestment(Investment i) {
-			trades.add(i);
-		}
-		
-		public void takePosition(String date, Integer new_pos, Double price) {
-			
-			if (currentInvestment == null) {
-				currentInvestment = new Investment(symbol);
-				currentInvestment.enterPosition(date, new_pos, price);
-			}
-			else {
-				if (currentInvestment.getPosition() < 0) {
-					/* we are short */
-					
-					if (new_pos >= 0) {
-						currentInvestment.closePosition(date, price);
-						trades.add(currentInvestment);
-					}
-					
-					if (new_pos > 0) {
-						currentInvestment = new Investment(symbol);
-						currentInvestment.enterPosition(date, new_pos, price);
-					}
-				}
-				else if (currentInvestment.getPosition() > 0) {
-					/* we are long */
-				}
-				else {
-					/* we are neutral */
-					
-				}
-			}
-			
-			
-		}
+	private Contract makeContract(String secType, String symbol, String exchange, String currency, String expiry, String tradingClass) {
+		Contract c = new Contract();
+		c.secType(secType);
+		c.symbol(symbol);
+		c.exchange(exchange);
+		c.currency(currency);
+		c.lastTradeDateOrContractMonth(expiry);
+		c.tradingClass(tradingClass);
+		return c;
 	}
 	
-	public class InvestmentManger {
-		private Symbol symbol;
-		public InvestmentManger(String symbolName) {
-			this.symbol = new Symbol(symbolName);
-		}
-	}
+	
+	
 	
 
 	/*
@@ -184,8 +106,6 @@ public class AnalyzeHistoryData {
 	 */
 	public AnalyzeHistoryData(String args[]) {
 
-		LogTools.setLog4JRootLoggerDefaultLevel(Level.ALL);
-		
 		Options options = new Options();
 		options.addOption("help", false, "Show help");
 
@@ -194,14 +114,8 @@ public class AnalyzeHistoryData {
 		options.addOption("account", true, "Account name");
 		options.addOption("client", true, "Client # (1-100 unique)");
 
-		options.addOption("sectype", true, "Security type");
-		options.addOption("symbol", true, "Symbol or Underlying (for FUT)");
-		options.addOption("expiry", true, "Expiry, only used for sectype FUT");
-		options.addOption("exchange", true, "Exchange abbrev");
-		options.addOption("currency", true, "Currency");
-		options.addOption("duration", true, "Duration");
-		options.addOption("durationunit", true, "Duration Unit");
-
+		// EDecoder.enableDebugging(true);
+		
 		CommandLineParser parser = new BasicParser();
 		try {
 			CommandLine cmd = parser.parse(options, args);
@@ -227,48 +141,7 @@ public class AnalyzeHistoryData {
 			if (cmd.hasOption("account")) {
 				twsAccount = cmd.getOptionValue("account");
 			}
-
-			if (cmd.hasOption("symbol")) {
-				symbol = cmd.getOptionValue("symbol");
-			}
-
-			if (cmd.hasOption("sectype")) {
-				secType = SecType.valueOf(cmd.getOptionValue("sectype"));
-			}
-
-			if (cmd.hasOption("expiry")) {
-				expiry = cmd.getOptionValue("expiry");
-			}
-
-			if (cmd.hasOption("exchange")) {
-				exchange = cmd.getOptionValue("exchange");
-			}
-
-			if (cmd.hasOption("currency")) {
-				currency = cmd.getOptionValue("currency");
-			}
-
-			if (cmd.hasOption("duration")) {
-				duration_i = Integer.parseInt(cmd.getOptionValue("duration"));
-			}
-
-			if (cmd.hasOption("durationunit")) {
-				duration_unit_s = cmd.getOptionValue("durationunit");
-			}
-
-			if (symbol == null || symbol.equals("")) {
-				logger.info("Must give a symbol!");
-				HelpFormatter formatter = new HelpFormatter();
-				formatter.printHelp("SaveHistoryData", options);
-				System.exit(1);
-			}
-
-			/*
-			 * 
-			 * 
-			 * 
-			 */
-			EDecoder.enableDebugging(true);
+			
 
 			marketAPI = new IBMarketAPI();
 			TwsConfig kv = new TwsConfig();
@@ -282,356 +155,157 @@ public class AnalyzeHistoryData {
 				@Override
 				public void information(InformationType it, KeyValues info) {
 					for (String s : info.keySet()) {
-						logger.info("[INFO]:" + it.name() + " "
-								+ s + " " + info.get(s));
+						logger.debug("[INFO]:" + it.name() + " "	+ s + " " + info.get(s));
 					}
 					
+					/* connection errors */
 					if (info.get("CODE").equals("507")) {
-						logger.info("Invalid/Duplicate Client ID");
+						logger.error("Invalid/Duplicate Client ID");
 						System.exit(1);
+					}
+					
+					/* reqHistory errors - should be directed */
+					if (info.get("CODE").equals("162")) {
+						logger.error("No market data permission");
+					}
+					
+					if (info.get("CODE").equals("354")) {
+						logger.error("Requested data not subscribed");
 					}
 				}
 			});
 
 			if (rc.get("STATUS").equals("OK")) {
-
-				/*
-				 * Consumer Thread
-				 */
-
-				Runnable r = new Runnable() {
-					@Override
-					public void run() {
-
-						MyInstrument m;
-						try {
-							while ((m = q.take()) != null) {
-
-								MyIBInstrument myib = (MyIBInstrument) m;
-								if (myib.getContract().secType() == SecType.None) {
-									// This signals "exit"
-									System.exit(1);
-								} else {
-									logger.info("Symbol " + m.getSymbol() + " loaded OK, getting Price History ");
-									AtomicBoolean flag = new AtomicBoolean(false);
-
-									final MyInstrument instr = m;
-
-									marketAPI.loadPriceHistory(instr, duration_i, duration_unit_s, barsize_s, new HistoryPriceHandler() {
-										@Override
-										public void bars(List<GenericBar> bars) {
-
-											analyzePriceHistory(instr, bars);
-
-											logger.info("Price History for "
-													+ instr.getSymbol()
-													+ " analyzed!");
-											flag.set(true);
-										}
-									});
-
-									while (!flag.get()) {
-										Thread.sleep(1000);
-									}
-								}
-							}
-						} catch (InterruptedException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
+				
+				fillContractList();
+				new Thread(loadAndExecuteThread).start();
+				
+				for (Contract c : contracts) {
+					
+					final Flag f = new Flag(false);
+					doAnalyze(c, duration_i, duration_unit_s, new IsReady() {
+						@Override
+						public void isReady() {
+							f.set(true);
 						}
-					}
-				};
-
-				new Thread(r).start();
-
+					});
+					
+					f.waitUntil(true);
+				}
+				
 				/*
-				 * Producer
+				 * Add a poison-pill to instrument queue
 				 */
-				GenericSecType st = GenericSecType.valueOf(secType.name());
-
-				logger.info("Loading Symbols for " + symbol + " " + exchange + " " + currency + " " + expiry);
-				marketAPI.loadSymbols(st, symbol, exchange, currency, expiry, new SymbolEventHandler() {
-					@Override
-					public void symbolLoaded(MyInstrument i) {
-						q.add(i);
-					}
-
-					@Override
-					public void noMoreSymbols() {
-						logger.info("No more symbols!");
-
-						// soooooooo ugly....
-
-						Contract c = new Contract();
-						c.secType(SecType.None);
-						MyInstrument end = new MyIBInstrument(c);
-						q.add(end);
-					}
-				});
+				Contract poison = new Contract();
+				poison.secType("None");
+				MyIBInstrument m = new MyIBInstrument(poison);
+				instrumentQueue.add(m);
 			}
 
 		} catch (UnrecognizedOptionException ex) {
 			logger.info(ex.getLocalizedMessage());
 			HelpFormatter formatter = new HelpFormatter();
-			formatter.printHelp("SaveHistoryData", options);
+			formatter.printHelp("AnalyzeHistoryData", options);
 			System.exit(5);
 		} catch (ParseException e) {
 			logger.info("CLI Option Parsing error!");
 			HelpFormatter formatter = new HelpFormatter();
-			formatter.printHelp("SaveHistoryData", options);
+			formatter.printHelp("AnalyzeHistoryData", options);
 			System.exit(4);
 		}
 
 	}
-
-	
-	
-	
-	
 	
 	/*
 	 * 
 	 * 
 	 */
-	public void analyzePriceHistory(MyInstrument instr, List<GenericBar> bars) {
+	private Runnable loadAndExecuteThread = new Runnable() {
+		@Override
+		public void run() {
 
-		ClassicMACD macdClassic = new ClassicMACD(26, 12, 9);
+			MyInstrument m;
+			try {
+				while ((m = instrumentQueue.take()) != null) {
 
-		String endDate = DateTools.getCurDateTimeLongAsIBStr();
+					MyIBInstrument myib = (MyIBInstrument) m;
+					if (myib.getContract().secType() == SecType.None) {
+						// This signals "exit"
+						
+						System.out.println("\n------------------------- SUMMARY -------------------------");
+						for (Symbol ss: symbols) {
+							System.out.println(ss.statistics());
+						}
+						
+						System.exit(1);
+					} 
+					else {
+						// logger.info("Symbol " + getId(m) + " loaded OK, getting Price History ");
+						
+						final MyInstrument instr = m;
+						
+						final Flag flag = new Flag(false);
+						
+						Symbol sym = new Symbol(instr.getSymbol());
+						symbols.add(sym);
+						
+						marketAPI.loadPriceHistory(instr, duration_i, duration_unit_s, barsize_s, new HistoryPriceHandler() {
+							@Override
+							public void bars(List<GenericBar> bars) {
+								// logger.info("---- Evaluating " + getId(instr) + " ---------------------------------------------");
+								sym.calcSignalsAndAct(instr, bars);
+								// logger.info("Price History for " + getId(instr) + " analyzed!");
+								// logger.info("-----------------------------------------------------------------------------------\n");
+								flag.set(true);
+							}
+						});
 
-		Double highest = -9999999.0;
-		Double lowest = 9999999.0;
-
-		/*
-		 * First scan to calc MACD standard deviation
-		 * 
-		 */
-		SummaryStatistics stats = new SummaryStatistics();
-
-		for (GenericBar b : bars) {
-			macdClassic.addPrice(b.getClose());
-			if (macdClassic.getMacd() > highest)
-				highest = macdClassic.getMacd();
-			if (macdClassic.getMacd() < lowest)
-				lowest = macdClassic.getMacd();
-			stats.addValue(macdClassic.getMacd());
-		}
-
-		// Some stats
-		logger.info("Lowest MACD:" + lowest);
-		logger.info("Highest MACD:" + highest);
-		logger.info("MACD StdDev:" + stats.getStandardDeviation());
-
-	
-		
-		MACD macd = new MACD(26,12);
-		MACDSignal macdSignal = new MACDSignal(macd, 9);
-		
-		/*
-		 * Second run:
-		 * 
-		 */
-
-		int candleId = 1;
-		Double oldDiff = 0d;
-		String symbol = instr.getSymbol();
-		int default_volume = 1;
-		int flags = 0;
-		String source = "";
-		String buyer = "";
-		String seller = "";
-		DATA_QUALITY dataQuality = DATA_QUALITY.NORMAL;
-
-		// macd = new ClassicMACD(26, 12, 9);
-		for (GenericBar b : bars) {
-			
-			String date = DateTools.DateFromTimestamp(b.getTime() * 1000);
-
-			//macd.addPrice(b.getClose());
-			
-			Candle c = new Candle(b.getTime() * 1000, 3600*24, candleId++);
-			c.addTrade(new FeedTrade(symbol, b.getTime() * 1000, default_volume, b.getClose(), flags, source, buyer, seller, dataQuality, b.getClose()));
-			macd.addCandle(c);
-
-			//Double diff = macd.getMacd() - macd.getSignal();
-			Double diff = macd.getValue() - macdSignal.getValue();
-			Double absdiff = Math.abs(diff);
-
-			// logger.info(date + " " + b.getClose() + " " + macd.getMacd());
-
-			Boolean crossUp		= isCrossUp(date, oldDiff, diff);
-			Boolean crossDown	= isCrossDown(date, oldDiff, diff);
-			
-			if (crossUp || crossDown) {
-				if (crossDown) {
-					takeOrExitPos2(date, "SHORT", b.getClose());
-				} else {
-					takeOrExitPos2(date, "LONG", b.getClose());
+						flag.waitUntil(true);
+						
+						
+					}
 				}
-			}
-			
-			oldDiff = diff;
-		}
-
-
-		logger.info("Last price is " + bars.get(bars.size() - 1).getClose());
-		logger.info("sumPnl=" + Money(sumPnl) + " (" + Percent(sumPct) + ") NO FEES!");
-	}
-
-	private Boolean in_pos = false;
-	private Double entry_price = 0d;
-	private String entry_date = "";
-	
-	private Double sumPnl = 0d;
-	private Double sumPct = 0.0;
-
-	/*
-	 * 
-	 * 
-	 * 
-	 */
-	private void takeOrExitPos(String date, String str, Double price) {
-		entry_date = date;
-		if (str.equals("LONG")) {
-			if (in_pos) {
-				// exit SHORT pos
-				Double profit = entry_price - price;
-				Double profitpct = profit / entry_price;
-				logger.info(date + " EXIT SHORT " + entry_price + " PROFIT "+ Money(profit) + " (" + Percent(profitpct));
-				
-				sumPct += profitpct;
-				
-				sumPnl += profit;
-				
-				// in_pos = false;
-				
-				entry_price = price;
-				in_pos = true;
-				logger.info(date + " NEW LONG " + entry_price);
-				
-			} else {
-				entry_price = price;
-				in_pos = true;
-				logger.info(date + "FIRST LONG " + entry_price);
-			}
-		} else { // SHORT
-			if (in_pos) {
-				// exit LONG pos
-				Double profit = price - entry_price;
-				Double profitpct = profit / entry_price;
-				logger.info(date + " EXIT LONG " + entry_price + " PROFIT "+ Money(profit) + " (" + Percent(profitpct));
-				
-				sumPct += profitpct;
-
-				sumPnl += profit;
-				
-				// in_pos = false;
-				logger.info("Taking NEW short pos at " + entry_price);
-				entry_price = price;
-				in_pos = true;
-				
-			} else {
-				// 
-				logger.info("Taking FIRST short pos at " + entry_price);
-				entry_price = price;
-				in_pos = true;
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
 		}
-	}
+	};
+	
+	private void doAnalyze(Contract c, Integer duration_i, String duration_unit_s, IsReady ready) {
+		
+		/*
+		 * Producer
+		 */
+		GenericSecType st = GenericSecType.valueOf(c.secType().name());
 
-	
-	
-	/*
-	 * 
-	 * 
-	 * 
-	 */
-	private void takeOrExitPos2(String date, String str, Double price) {
-		entry_date = date;
-		if (str.equals("LONG")) {
-			if (in_pos) {
-				// exit SHORT pos
-				Double profit = entry_price - price;
-				Double profitpct = profit / entry_price;
-				logger.info(date + " EXIT SHORT " + price + " PROFIT "+ Money(profit) + " (" + Percent(profitpct) + ")");
-				
-				sumPct += profitpct;
-				sumPnl += profit;
-				
-				// in_pos = false;
-				
-				in_pos = false;
-			} 
-			else {
-				entry_price = price;
-				in_pos = true;
-				logger.info(date + "NEW LONG " + entry_price);
+		// logger.info("Loading Symbols for " + c.symbol() + " " + c.exchange() + " " + c.currency() + " " + c.lastTradeDateOrContractMonth());
+		
+		marketAPI.loadSymbols(st, c.symbol(), c.exchange(), c.currency(), c.lastTradeDateOrContractMonth(), new SymbolEventHandler() {
+			@Override
+			public void symbolLoaded(MyInstrument i) {
+				// logger.info("Adding " + getId(i) + " to Instrument Queue");
+				instrumentQueue.add(i);
 			}
-		} else { // SHORT
-			if (in_pos) {
-				// exit LONG pos
-				Double profit = price - entry_price;
-				Double profitpct = profit / entry_price;
-				logger.info(date + " EXIT LONG " + price + " PROFIT "+ Money(profit) + " (" + Percent(profitpct) + ")");
-				
-				sumPct += profitpct;
-				sumPnl += profit;
-				
-				in_pos = false;
-			} else {
-				// 
-				entry_price = price;
-				in_pos = true;
-				logger.info(date + " NEW SHORT " + entry_price);
+
+			@Override
+			public void noMoreSymbols() {
+				ready.isReady();
 			}
-		}
+		});
 	}
 	
-	
-	private String Money(final Double d){
-		return String.format("%1.2f", d);
+	private String getId(Contract c) {
+		return c.secType().name() + "/" + c.symbol() + "/" + c.exchange() + "/" + c.currency() + "/" + c.tradingClass();
 	}
 	
-	private String Percent(final Double d){
-		return String.format("%1.2f%%", d);
+	private String getId(MyInstrument i) {
+		return i.getSymbol() + "/" + i.getExchange() + "/" + i.getCurrency() + "/" + i.getMultiplier() + "/" + i.getStr("LONGNAME");
 	}
+		
 	
-	private String Macd(final Double d){
-		return String.format("%1.4f", d);
-	}
 	
-	private Boolean isCross(final String date, final Double a, final Double b) {
-		if (a == 0.0 || b == 0.0)
-			return false;
-		Boolean r = a * b < 0.0;
-		if (r) {
-			logger.info(date + " CROSS!!! " + Macd(a) + " " + Macd(b));
-		}
-		return r;
-	}
-
-	private Boolean isCrossUp(final String date, final Double a, final Double b) {
-		if (a == 0.0 || b == 0.0)
-			return false;
-
-		if (a < 0.0 && b >= 0.0) {
-			logger.info(date + " CROSS UP, MACD CHANGED FROM " + Macd(a) + " " + Macd(b));
-			return true;
-		}
-		return false;
-	}
-
-	private Boolean isCrossDown(final String date, final Double a, final Double b) {
-		if (a == 0.0 || b == 0.0)
-			return false;
-
-		if (a >= 0.0 && b < 0.0) {
-			logger.info(date + " CROSS DOWN, MACD CHANGED FROM " + Macd(a) + " " + Macd(b));
-			return true;
-		}
-		return false;
-	}
-
+	
 	public static void main(String[] args) {
 		new AnalyzeHistoryData(args);
 	}
