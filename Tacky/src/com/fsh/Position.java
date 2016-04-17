@@ -53,8 +53,21 @@ public class Position {
 			return entry_price - exit_price;
 		return 0.0;
 	}
+
+	// Alt 2
+	public Double getPnL(Double price) {
+		if (pos > 0)
+			return price - entry_price;
+		if (pos < 0)
+			return entry_price - price;
+		return 0.0;
+	}
 	
 	public Double getPnlPct() {
 		return getPnL() / entry_price;
+	}
+	
+	public Double getPnlPct(Double price) {
+		return getPnL(price) / entry_price;
 	}
 }

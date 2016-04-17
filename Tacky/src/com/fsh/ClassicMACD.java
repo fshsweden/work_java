@@ -45,7 +45,7 @@ public class ClassicMACD {
 	}
 	
 	public Double getMacdPct() {
-		return macd;
+		return (macd / first_price) * 100.0 ;
 	}
 	
 	public Double getDiff() {

@@ -56,7 +56,7 @@ public class AnalyzeHistoryData {
 	
 	private LinkedBlockingQueue<MyInstrument> instrumentQueue = new LinkedBlockingQueue<MyInstrument>();
 
-	private int duration_i = 5;
+	private int duration_i = 2;
 	private String duration_unit_s = "Y";
 	private String barsize_s = "1D";
 	
@@ -69,19 +69,19 @@ public class AnalyzeHistoryData {
 
 		/* Replace Contract reference with "GenericContract" */
 		Contract c = new Contract();
-		contracts.add(makeContract("STK", "DFE","SMART","USD","",""));
-		contracts.add(makeContract("STK", "ISRA","SMART","USD","",""));
-		contracts.add(makeContract("STK", "EWS","SMART","USD","",""));
-		contracts.add(makeContract("STK", "EWO","SMART","USD","",""));
+//		contracts.add(makeContract("STK", "DFE","SMART","USD","",""));
+//		contracts.add(makeContract("STK", "ISRA","SMART","USD","",""));
+//		contracts.add(makeContract("STK", "EWS","SMART","USD","",""));
+//		contracts.add(makeContract("STK", "EWO","SMART","USD","",""));
 		contracts.add(makeContract("STK", "EIRL","SMART","USD","",""));
 		
 //		contracts.add(makeContract("STK", "MIDD","","","",""));
-		contracts.add(makeContract("STK", "VTI","SMART","USD","",""));
-		contracts.add(makeContract("STK", "SPY","SMART","USD","",""));
-		contracts.add(makeContract("STK", "RSP","SMART","USD","",""));
-		contracts.add(makeContract("STK", "SPD","SMART","USD","",""));
-		
-		contracts.add(makeContract("STK", "FXE","SMART","USD","",""));
+//		contracts.add(makeContract("STK", "VTI","SMART","USD","",""));
+//		contracts.add(makeContract("STK", "SPY","SMART","USD","",""));
+//		contracts.add(makeContract("STK", "RSP","SMART","USD","",""));
+//		contracts.add(makeContract("STK", "SPD","SMART","USD","",""));
+//		
+//		contracts.add(makeContract("STK", "FXE","SMART","USD","",""));
 	}
 	
 	private Contract makeContract(String secType, String symbol, String exchange, String currency, String expiry, String tradingClass) {

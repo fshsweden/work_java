@@ -30,6 +30,7 @@ public class Symbol {
 
 	Double startValue = null;
 	Double lastValue = null;
+	String lastDate = null;
 	
 	public Symbol(String name) {
 		symbol = name;
@@ -51,65 +52,76 @@ public class Symbol {
 	private void takeOrExitPosMethod1(PositionType pType, String date, Double price) {
 
 		if (pType == PositionType.LONG) {
-
-			// Take new LONG Position
 			if (currentPosition == null) {
-				currentPosition = new Position(symbol);
-				currentPosition.enterPosition(PositionType.LONG, date, 1, price);
-
+				// Take new LONG Position
+				takeNewPosition(PositionType.LONG, date, price);
 				// logger.info(date + " ENTER LONG " + currentPosition.getEntryPrice());
 			} 
 			else {
-
-				currentPosition.closePosition(date, price);
-
 				// We had a SHORT pos - exit!
-				Double profit = currentPosition.getEntryPrice() - price;
-				Double profitpct = profit / currentPosition.getEntryPrice() * 100.0;
-				// logger.info(date + " EXIT SHORT " + price + " PROFIT " + Money(profit) + " (" + Percent(profitpct) + " " + Money(profit) + "/" + currentPosition.getEntryPrice() + " )");
-
-				sumPct += profitpct;
-				sumPnl += profit;
-				countShort++;
-				sumPnlShort += profit;
-				
-				// logger.info("  " + ProfitPct(profitpct) + " ACCUMULATED PNL=" + Percent(sumPct));
-
-				currentPosition = null;
+				exitPosition(date, price);
 			}
-		} else
-			if (pType == PositionType.SHORT) {
-
+		} 
+		else if (pType == PositionType.SHORT) {
+			if (currentPosition == null) {
 				// Take new SHORT Position
-				if (currentPosition == null) {
-
-					currentPosition = new Position(symbol);
-					currentPosition.enterPosition(PositionType.SHORT, date, -1, price);
-
-					// logger.info(date + " ENTER SHORT " + currentPosition.getEntryPrice());
-				}
-				// We had a LONG pos - exit!
-				else {
-
-					currentPosition.closePosition(date, price);
-
-					Double profit = price - currentPosition.getEntryPrice();
-					Double profitpct = profit / currentPosition.getEntryPrice() * 100.0;
-					// logger.info(date + " EXIT LONG " + price + Profit(profit) + " (" + Percent(profitpct) + " " + Money(profit) + "/" + currentPosition.getEntryPrice() + " )");
-
-					sumPct += profitpct;
-					sumPnl += profit;
-					countLong++;
-
-					sumPnlLong += profit;
-
-					// logger.info("  " + ProfitPct(profitpct) + " ACCUMULATED PNL=" + Percent(sumPct));
-
-					currentPosition = null;
-				}
+				takeNewPosition(PositionType.SHORT, date, price);
+				// logger.info(date + " ENTER SHORT " + currentPosition.getEntryPrice());
 			}
+			else {
+				// We had a LONG pos - exit!
+				exitPosition(date, price);
+			}
+		}
 	}
 
+	
+	private void takeNewPosition(PositionType pType, String date, Double price) {
+		if (pType == PositionType.LONG) {
+			currentPosition = new Position(symbol);
+			currentPosition.enterPosition(PositionType.LONG, date, 1, price);
+		}
+		else if (pType == PositionType.SHORT) {
+			currentPosition = new Position(symbol);
+			currentPosition.enterPosition(PositionType.SHORT, date, -1, price);
+		}
+	}
+	
+	private void exitPosition(String date, Double price) {
+		
+		if (currentPosition.getPosition() < 0) {
+			currentPosition.closePosition(date, price);
+			// We had a SHORT pos - exit!
+			Double profit = currentPosition.getEntryPrice() - price;
+			Double profitpct = profit / currentPosition.getEntryPrice() * 100.0;
+			logger.info(date + " EXIT SHORT " + price + " PROFIT " + Money(profit) + " (" + Percent(profitpct) + " " + Money(profit) + "/" + currentPosition.getEntryPrice() + " )");
+			sumPct += profitpct;
+			sumPnl += profit;
+			countShort++;
+			sumPnlShort += profit;
+			// logger.info("  " + ProfitPct(profitpct) + " ACCUMULATED PNL=" + Percent(sumPct));
+			
+			currentPosition = null;
+		}
+		else {
+			currentPosition.closePosition(date, price);
+			Double profit = price - currentPosition.getEntryPrice();
+			Double profitpct = profit / currentPosition.getEntryPrice() * 100.0;
+			
+			logger.info(date + " EXIT LONG " + price + Profit(profit) + " (" + Percent(profitpct) + " " + Money(profit) + "/" + currentPosition.getEntryPrice() + " )");
+			
+			sumPct += profitpct;
+			sumPnl += profit;
+			countLong++;
+			sumPnlLong += profit;
+			
+			//logger.info("  " + ProfitPct(profitpct) + " ACCUMULATED PNL=" + Percent(sumPct));
+			
+			currentPosition = null;
+		}
+	}
+	
+	
 	private String Money(final Double d) {
 		return String.format("%1.2f", d);
 	}
@@ -132,6 +144,10 @@ public class Symbol {
 		return String.format("%1.2f%%", d);
 	}
 
+	private String Percent4(final Double d) {
+		return String.format("%1.4f%%", d);
+	}
+	
 	private String Macd(final Double d) {
 		return String.format("%1.4f", d);
 	}
@@ -211,6 +227,10 @@ public class Symbol {
 				startValue = b.getClose();
 			}
 
+			String date = DateTools.DateFromTimestamp(b.getTime() * 1000);
+			// System.out.println("DATE:" + date);
+			
+			lastDate = date; 
 			lastValue = b.getClose();
 			
 			macd.addPrice(b.getClose());
@@ -218,8 +238,6 @@ public class Symbol {
 			shortEMA.addPrice(b.getClose());
 			ema5.addPrice(b.getClose());
 
-			String date = DateTools.DateFromTimestamp(b.getTime() * 1000);
-			// System.out.println("DATE:" + date);
 
 			Double diff = macd.getDiff();
 			Double absdiff = Math.abs(diff);
@@ -243,10 +261,7 @@ public class Symbol {
 			}
 			*/
 
-			if (currentPosition == null && macd.getMacd() >= -0.25 && macd.getMacd() <= 0.25) {
-				/* SKIP */
-			} 
-			else {
+			{
 				Boolean crossUp		= isCrossUp(date, startValue, oldDiff, diff);
 				Boolean crossDown	= isCrossDown(date, startValue, oldDiff, diff);
 				
@@ -254,26 +269,74 @@ public class Symbol {
 				Boolean dntrend = shortEMA.getEMA()  < longEMA.getEMA();
 				
 				Boolean trendTest = false;
+				Boolean zerotest = false;
+				Boolean abovezero = macd.getMacd() >= 0d; 
 
-				if (crossUp || crossDown) {
-					if (crossDown) {
-						if (trendTest && currentPosition == null && uptrend ) {
-							logger.warn("Skipping NEW position since longEMA < shortEMA)");
-						} else {
-							takeOrExitPosMethod1(PositionType.SHORT, date, b.getClose());
-						}
-					} else {
+				if (currentPosition == null) {
 
-						if (trendTest && currentPosition == null && dntrend ) {
-							logger.warn("Skipping position since longEMA > shortEMA");
-						} else {
-							takeOrExitPosMethod1(PositionType.LONG, date, b.getClose());
+					/*
+					 * CHECK TO SEE IF WE SHOULD TAKE A NEW POSITION
+					 * 
+					 * 
+					 */
+					
+					if (macd.getMacdPct() >= -1.0 && macd.getMacd() <= 1.0) {
+						/* SKIP */
+					}
+					else {
+						if (crossUp || crossDown) {
+							if (crossDown) {
+								if (currentPosition == null && ((trendTest && uptrend) || (zerotest && abovezero) ) ) {
+									logger.warn(date + " Skipping position because of validity test");
+								} else {
+									takeNewPosition(PositionType.SHORT, date, b.getClose());
+								}
+							} else {
+	
+								if (currentPosition == null && ((trendTest && dntrend) || (zerotest && !abovezero) ) ) {
+									logger.warn(date + " Skipping position because of validity test");
+								} else {
+									takeNewPosition(PositionType.LONG, date, b.getClose());
+								}
+							}
 						}
 					}
 				}
+				else {
+
+					/*
+					 * CHECK TO SEE IF WE SHOULD EXIT THE POSITION
+					 * 
+					 * 
+					 */
+					/* Stop Loss Test */
+					System.out.println("Running P&L: " + date + " " + b.getClose() + " " + Percent4(currentPosition.getPnlPct(b.getClose())));
+					if (currentPosition.getPnlPct(b.getClose()) < -0.02) {
+						System.out.println("--------- STOP LOSS! --------------------");
+						exitPosition(date, b.getClose());
+					}
+//					else if (currentPosition.getPnlPct(b.getClose()) > 0.03) {
+//						System.out.println("--------- TAKE PROFIT! --------------------");
+//						exitPosition(date, b.getClose());
+//					}
+					else {
+						
+						if (crossUp || crossDown) {
+							exitPosition(date, b.getClose());
+						}
+					}
+					
+				}
+				
 			}
 
 			oldDiff = diff;
+		}
+		
+		
+		// close position if we have one
+		if (currentPosition != null) {
+			exitPosition(lastDate, lastValue);
 		}
 
 		// Dont print if we have no positions!
